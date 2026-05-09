@@ -25,9 +25,10 @@ COLORS = {
 FONT_MONO = "monospace"
 
 NAV_ITEMS = [
-    ("Scraper",  ft.Icons.TRAVEL_EXPLORE_ROUNDED, ft.Icons.TRAVEL_EXPLORE_ROUNDED),
+    ("Scraper",  ft.Icons.TRAVEL_EXPLORE_ROUNDED,  ft.Icons.TRAVEL_EXPLORE_ROUNDED),
     ("History",  ft.Icons.HISTORY_ROUNDED,         ft.Icons.HISTORY_ROUNDED),
     ("Settings", ft.Icons.TUNE_ROUNDED,            ft.Icons.TUNE_ROUNDED),
+    ("Binder", ft.CupertinoIcons.BOOK,             ft.CupertinoIcons.BOOK)
 ]
 
 
