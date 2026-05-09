@@ -21,6 +21,7 @@ _MAX_ZOOM = 1.6
 _ZOOM_STEP = 0.1
 
 
+
 def build_binder_view(
     page: ft.Page,
     state: AppState,
@@ -35,6 +36,8 @@ def build_binder_view(
     # ── View state ───────────────────────────────────────────────────
     _current_physical_page = 1  # 1-indexed
     _zoom = 1.0
+    _pan_offset_x: float = 0.0
+    _pan_offset_y: float = 0.0
 
     # ── Top bar ──────────────────────────────────────────────────────
 
@@ -91,6 +94,7 @@ def build_binder_view(
         spacing=16,
         alignment=ft.MainAxisAlignment.CENTER,
         vertical_alignment=ft.CrossAxisAlignment.START,
+        animate_offset=ft.Animation(80, ft.AnimationCurve.EASE_OUT),
     )
 
     spread_scroll = ft.GestureDetector(
@@ -350,8 +354,7 @@ def build_binder_view(
             _refresh_and_update()
 
     def _on_scroll(e: ft.ScrollEvent) -> None:
-        # Scroll on the binder area zooms in/out.
-        if e.scroll_delta_y < 0:
+        if e.scroll_delta.y < 0:
             _adjust_zoom(_ZOOM_STEP)
         else:
             _adjust_zoom(-_ZOOM_STEP)
@@ -360,12 +363,31 @@ def build_binder_view(
         nonlocal _zoom
         _zoom = round(max(_MIN_ZOOM, min(_MAX_ZOOM, _zoom + delta)), 2)
         _refresh_and_update()
+    
+    def _on_pan_update(e: ft.DragUpdateEvent) -> None:
+        nonlocal _pan_offset_x, _pan_offset_y
+        _pan_offset_x += e.local_delta.x
+        _pan_offset_y += e.local_delta.y
+        spread_row.offset = ft.Offset(
+            _pan_offset_x / (page.width or 1),
+            _pan_offset_y / (page.height or 1),
+        )
+        spread_row.update()
+
+    def _on_pan_start(_: ft.DragStartEvent) -> None:
+        pass
 
     spread_scroll.on_scroll = _on_scroll
+    spread_scroll.on_pan_update = _on_pan_update
+    spread_scroll.on_pan_start = _on_pan_start    
 
     # ── Full refresh ─────────────────────────────────────────────────
 
     def _refresh_and_update() -> None:
+        nonlocal _pan_offset_x, _pan_offset_y
+        _pan_offset_x = 0.0
+        _pan_offset_y = 0.0
+        spread_row.offset = ft.Offset(0, 0)
         _refresh_spread()
         _update_nav()
         binder_body.controls = [spread_scroll] if _active_binder() else [
