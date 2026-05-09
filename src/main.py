@@ -16,7 +16,7 @@ def main() -> int:
     logger.info("Starting %s", config.app.name)
 
     try:
-        ft.app(target=build_app, view=ft.AppView.FLET_APP)
+        ft.run(build_app)
     except Exception:
         logger.exception("Unhandled exception — application will exit.")
         return 1

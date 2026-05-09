@@ -25,9 +25,9 @@ COLORS = {
 FONT_MONO = "monospace"
 
 NAV_ITEMS = [
-    ("Scraper",  ft.icons.TRAVEL_EXPLORE_ROUNDED, ft.icons.TRAVEL_EXPLORE),
-    ("History",  ft.icons.HISTORY_ROUNDED,         ft.icons.HISTORY),
-    ("Settings", ft.icons.TUNE_ROUNDED,            ft.icons.TUNE),
+    ("Scraper",  ft.Icons.TRAVEL_EXPLORE_ROUNDED, ft.Icons.TRAVEL_EXPLORE_ROUNDED),
+    ("History",  ft.Icons.HISTORY_ROUNDED,         ft.Icons.HISTORY_ROUNDED),
+    ("Settings", ft.Icons.TUNE_ROUNDED,            ft.Icons.TUNE_ROUNDED),
 ]
 
 
@@ -51,7 +51,7 @@ def build_scraper_view(page: ft.Page) -> ft.Control:
         content=ft.Text("Ready", size=12, color=COLORS["text_muted"]),
         bgcolor=COLORS["surface_2"],
         border_radius=20,
-        padding=ft.padding.symmetric(horizontal=12, vertical=4),
+        padding=ft.Padding.symmetric(horizontal=12, vertical=4),
     )
 
     result_text = ft.Text(
@@ -68,7 +68,7 @@ def build_scraper_view(page: ft.Page) -> ft.Control:
         border_radius=12,
         padding=20,
         expand=True,
-        border=ft.border.all(1, COLORS["border"]),
+        border=ft.Border.all(1, COLORS["border"]),
     )
 
     progress_bar = ft.ProgressBar(
@@ -112,10 +112,8 @@ def build_scraper_view(page: ft.Page) -> ft.Control:
             page.update()
 
     scrape_btn = ft.ElevatedButton(
-        text="Scrape",
-        icon=ft.icons.TRAVEL_EXPLORE_ROUNDED,
+        content=ft.Text("Scrape", color=COLORS["text_primary"]),
         bgcolor=COLORS["accent"],
-        color=COLORS["text_primary"],
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10)),
         height=48,
         on_click=on_scrape,
@@ -210,21 +208,21 @@ def build_app(page: ft.Page, gui_config: GuiConfig | None = None) -> None:
         leading=ft.Container(
             content=ft.Column(
                 [
-                    ft.Icon(ft.icons.HEX_ROUNDED, color=COLORS["accent"], size=28),
+                    ft.Icon(ft.Icons.MANAGE_SEARCH, color=COLORS["accent"], size=28),
                     ft.Text(app_config.app.name, size=12, weight=ft.FontWeight.W_600,
                             color=COLORS["text_primary"]),
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=4,
             ),
-            padding=ft.padding.symmetric(vertical=20),
+            padding=ft.Padding.symmetric(horizontal=0, vertical=20),
         ),
         destinations=[
             ft.NavigationRailDestination(
                 icon=icon,
                 selected_icon=icon_sel,
                 label=label,
-                padding=ft.padding.symmetric(vertical=4),
+                padding=ft.Padding.symmetric(horizontal=0, vertical=4),
             )
             for label, icon, icon_sel in NAV_ITEMS
         ],
