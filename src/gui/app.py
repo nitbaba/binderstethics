@@ -176,12 +176,12 @@ def build_settings_view(_: ft.Page) -> ft.Control:
 def build_app(page: ft.Page, gui_config: GuiConfig | None = None) -> None:
     cfg = gui_config or app_config.gui
 
-    page.title = app_config.app.name
+    page.title = f"{app_config.app.name} — {cfg.window_width}×{cfg.window_height}"
     page.bgcolor = COLORS["bg"]
-    page.window_width = cfg.window_width
-    page.window_height = cfg.window_height
-    page.window_min_width = 700
-    page.window_min_height = 500
+    page.window.width = cfg.window_width
+    page.window.height = cfg.window_height
+    page.window.min_width = 700
+    page.window.min_height = 500
     page.padding = 0
     page.theme = ft.Theme(color_scheme_seed=COLORS["accent"])
     page.dark_theme = ft.Theme(color_scheme_seed=COLORS["accent"])
