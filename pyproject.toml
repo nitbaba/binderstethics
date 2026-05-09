@@ -5,17 +5,15 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "myapp"
 version = "0.1.0"
-description = "Desktop GUI application with web scraping capability"
+description = "Pokemon TCG virtual binder"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 
 dependencies = [
-    "flet>=0.23",            # Flutter-powered desktop/web GUI
-    "httpx>=0.27",           # Async-capable HTTP client
-    "beautifulsoup4>=4.12",  # HTML parsing
-    "lxml>=5.2",             # Fast BS4 parser backend
-    "python-dotenv>=1.0",    # .env loading
+    "flet>=0.23",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]
@@ -25,16 +23,11 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.4",
     "mypy>=1.10",
-    "types-beautifulsoup4",
-    "respx>=0.21",           # httpx-native HTTP mocking
+    "respx>=0.21",
 ]
 
 [project.scripts]
 myapp = "src.main:main"
-
-# ---------------------------------------------------------------------------
-# Tool configuration
-# ---------------------------------------------------------------------------
 
 [tool.setuptools.packages.find]
 where = ["."]
