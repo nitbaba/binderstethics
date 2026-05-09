@@ -124,10 +124,12 @@ def build_binder_view(
         return state.active_binder
 
     def _card_w() -> float:
-        return _BASE_CARD_W * _zoom
+        available = max(600, page.width - 230)
+        natural = (available / (_cols() + 1)) * 0.75
+        return min(natural, _BASE_CARD_W * 2) * _zoom
 
     def _card_h() -> float:
-        return _BASE_CARD_H * _zoom
+        return _card_w() * 1.4
 
     def _total_pages() -> int:
         b = _active_binder()
@@ -418,6 +420,12 @@ def build_binder_view(
         vertical_alignment=ft.CrossAxisAlignment.CENTER,
         spacing=4,
     )
+
+    def _on_page_resize(_: ft.ControlEvent) -> None:
+        if _active_binder() is not None:
+            _refresh_and_update()
+
+    page.on_resize = _on_page_resize
 
     return ft.Column(
         [

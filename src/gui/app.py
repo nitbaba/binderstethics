@@ -77,6 +77,14 @@ def build_app(page: ft.Page) -> None:
         expand=True,
     )
 
+    def _on_resize(_: ft.ControlEvent) -> None:
+        sidebar.width = max(180, int(page.width * 0.12))
+        if state.active_binder is not None:
+            state.notify_binder_changed()
+        page.update()
+
+    page.on_resize = _on_resize
+    
     page.add(
         ft.Row(
             [

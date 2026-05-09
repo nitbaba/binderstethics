@@ -286,6 +286,6 @@ def build_sidebar(page: ft.Page, state: AppState, db: Database) -> ft.Control:
         ),
         bgcolor=COLORS["surface"],
         border_radius=0,
-        width=210,
+        width=max(180, int(page.width * 0.12)),
         expand=False,
     )

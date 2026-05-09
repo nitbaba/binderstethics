@@ -132,7 +132,7 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
         bgcolor=COLORS["surface"],
         border_radius=10,
         padding=12,
-        width=248,
+        width=max(200, int(page.width * 0.15)),
         border=ft.Border.all(1, COLORS["border"]),
     )
 
