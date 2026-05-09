@@ -45,3 +45,6 @@ logs/
 
 # Flet build output
 build/
+
+# DB data local to user
+data/

@@ -99,7 +99,6 @@ def build_binder_view(
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             scroll=ft.ScrollMode.AUTO,
         ),
-        on_scroll=_on_scroll,
     )
 
     empty_label = ft.Text(
@@ -112,7 +111,7 @@ def build_binder_view(
         [
             ft.Container(
                 content=empty_label,
-                alignment=ft.alignment.center,
+                alignment=ft.Alignment(0, 0),
                 expand=True,
             ),
         ],
@@ -357,6 +356,8 @@ def build_binder_view(
         _zoom = round(max(_MIN_ZOOM, min(_MAX_ZOOM, _zoom + delta)), 2)
         _refresh_and_update()
 
+    spread_scroll.on_scroll = _on_scroll
+
     # ── Full refresh ─────────────────────────────────────────────────
 
     def _refresh_and_update() -> None:
@@ -365,7 +366,7 @@ def build_binder_view(
         binder_body.controls = [spread_scroll] if _active_binder() else [
             ft.Container(
                 content=empty_label,
-                alignment=ft.alignment.center,
+                alignment=ft.Alignment(0, 0),
                 expand=True,
             )
         ]

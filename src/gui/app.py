@@ -58,7 +58,8 @@ def build_app(page: ft.Page) -> None:
                 db.save_binder(state.active_binder)
                 logger.info("Auto-saved on close: binder id=%d", state.active_binder.id)
             db.close()
-            page.window.destroy()
+            page.window.visible = False
+            page.update()
 
     page.window.prevent_close = True
     page.window.on_event = _on_window_event
