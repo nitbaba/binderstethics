@@ -52,17 +52,13 @@ def build_app(page: ft.Page) -> None:
 
     # ── Window close: auto-save ──────────────────────────────────────
 
-    def _on_window_event(e: ft.WindowEvent) -> None:
-        if e.type == ft.WindowEventType.CLOSE:
-            if state.active_binder is not None:
-                db.save_binder(state.active_binder)
-                logger.info("Auto-saved on close: binder id=%d", state.active_binder.id)
-            db.close()
-            page.window.visible = False
-            page.update()
+    def _on_close(_: ft.ControlEvent) -> None:
+        if state.active_binder is not None:
+            db.save_binder(state.active_binder)
+            logger.info("Auto-saved on close: binder id=%d", state.active_binder.id)
+        db.close()
 
-    page.window.prevent_close = True
-    page.window.on_event = _on_window_event
+    page.on_close = _on_close
 
     # ── Build views ──────────────────────────────────────────────────
 

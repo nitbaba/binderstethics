@@ -231,14 +231,17 @@ def build_binder_view(
                 [
                     ft.Image(src=card.image_small, width=w, height=h, fit=ft.BoxFit.CONTAIN),
                     ft.Container(
-                        content=ft.IconButton(
-                            icon=ft.Icons.CLOSE,
-                            icon_color=COLORS["error"],
-                            icon_size=14,
-                            on_click=lambda _, pp=physical_page, s=side, p=pos: _remove_card(pp, s, p),
+                        content=ft.GestureDetector(
+                            content=ft.Container(
+                                content=ft.Icon(ft.Icons.CLOSE, color=COLORS["error"], size=14),
+                                bgcolor=COLORS["surface"],
+                                border_radius=10,
+                                padding=2,
+                            ),
+                            on_tap=lambda _, pp=physical_page, s=side, p=pos: _remove_card(pp, s, p),
                         ),
-                        right=0,
-                        top=0,
+                        right=2,
+                        top=2,
                     ),
                 ],
                 width=w,
