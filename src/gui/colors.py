@@ -1,0 +1,16 @@
+COLORS = {
+    "bg":           "#0F1117",
+    "surface":      "#1A1D27",
+    "surface_2":    "#22263A",
+    "accent":       "#6C63FF",
+    "accent_dim":   "#3D3880",
+    "success":      "#3DDC84",
+    "error":        "#FF5370",
+    "warning":      "#FFB74D",
+    "text_primary": "#E8E9F3",
+    "text_muted":   "#6B7280",
+    "border":       "#2A2D3E",
+    "slot_empty":   "#12151E",
+    "slot_hover":   "#2A2D3E",
+    "slot_border":  "#3A3D4E",
+}
