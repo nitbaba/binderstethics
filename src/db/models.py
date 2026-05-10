@@ -12,7 +12,6 @@ class BinderSize(Enum):
     SIXTEEN = 16
 
 
-# Page counts per binder type, matching Vault X specs.
 PAGES_BY_SIZE: dict[BinderSize, int] = {
     BinderSize.FOUR: 20,
     BinderSize.NINE: 20,
@@ -23,33 +22,28 @@ PAGES_BY_SIZE: dict[BinderSize, int] = {
 
 @dataclass
 class Card:
-    """A Pokemon TCG card as returned by the API."""
     api_id: str
     name: str
     set_name: str
     set_id: str
     number: str
-    image_small: str   # URL — thumbnail shown in search results
-    image_large: str   # URL — shown in preview panel
+    image_small: str
+    image_large: str
 
 
 @dataclass
 class BinderSlot:
-    """One pocket in the binder. card is None when the slot is empty."""
-    page_number: int   # 1-indexed physical page
-    side: int          # 0 = front, 1 = back
-    position: int      # 0-indexed within the side's grid
+    page_number: int
+    side: int
+    position: int
     card: Optional[Card] = None
 
 
 @dataclass
 class Binder:
-    """A virtual binder with a fixed size and a collection of slots."""
     id: int
     name: str
     size: BinderSize
-    # Slots are the authoritative in-memory state.
-    # Key: (page_number, side, position)
     slots: dict[tuple[int, int, int], BinderSlot] = field(default_factory=dict)
 
     @property
@@ -80,3 +74,39 @@ class Binder:
         src = self.get_slot(src_page, src_side, src_pos)
         dst = self.get_slot(dst_page, dst_side, dst_pos)
         src.card, dst.card = dst.card, src.card
+
+
+# ---------------------------------------------------------------------------
+# Display presets
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Preset:
+    key: str
+    label: str
+    width: int
+    height: int
+    scale_factor: float
+    fullscreen: bool = False
+
+
+PRESETS: list[Preset] = [
+    Preset("hd",         "HD  1280×720",    1280,  720,  0.75),
+    Preset("fhd",        "FHD  1920×1080",  1920, 1080,  1.0),
+    Preset("qhd",        "2K  2560×1440",   2560, 1440,  1.25),
+    Preset("uhd",        "4K  3840×2160",   3840, 2160,  1.5),
+    Preset("fullscreen", "Fullscreen",          0,    0,  1.0, fullscreen=True),
+]
+
+DEFAULT_PRESET: Preset = PRESETS[1]  # FHD
+
+PRESET_BY_KEY: dict[str, Preset] = {p.key: p for p in PRESETS}
+
+
+def nearest_preset(width: float, height: float) -> Preset:
+    """Return the preset whose resolution is closest to the given dimensions."""
+    non_fullscreen = [p for p in PRESETS if not p.fullscreen]
+    return min(
+        non_fullscreen,
+        key=lambda p: abs(p.width - width) + abs(p.height - height),
+    )

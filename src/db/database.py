@@ -6,7 +6,10 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
-from src.db.models import Binder, BinderSize, Card, BinderSlot
+from src.db.models import (
+    Binder, BinderSize, Card, BinderSlot,
+    Preset, PRESET_BY_KEY, DEFAULT_PRESET,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +28,15 @@ CREATE TABLE IF NOT EXISTS slots (
     card_json   TEXT,
     PRIMARY KEY (binder_id, page_number, side, position)
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+    key     TEXT PRIMARY KEY,
+    value   TEXT NOT NULL
+);
 """
 
 
 class Database:
-    """Thin SQLite wrapper. One instance lives for the lifetime of the app."""
-
     def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(path), check_same_thread=False)
@@ -44,11 +50,39 @@ class Database:
         self._conn.close()
 
     # ------------------------------------------------------------------
+    # Settings
+    # ------------------------------------------------------------------
+
+    def get_setting(self, key: str, default: str = "") -> str:
+        row = self._conn.execute(
+            "SELECT value FROM settings WHERE key = ?", (key,)
+        ).fetchone()
+        return row["value"] if row else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        self._conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?)"
+            " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
+        self._conn.commit()
+
+    def get_preset(self) -> Preset:
+        key = self.get_setting("preset_key", DEFAULT_PRESET.key)
+        return PRESET_BY_KEY.get(key, DEFAULT_PRESET)
+
+    def save_preset(self, preset: Preset) -> None:
+        self.set_setting("preset_key", preset.key)
+        logger.info("Saved preset: %s", preset.key)
+
+    # ------------------------------------------------------------------
     # Binders
     # ------------------------------------------------------------------
 
     def list_binders(self) -> list[Binder]:
-        rows = self._conn.execute("SELECT id, name, size FROM binders ORDER BY id").fetchall()
+        rows = self._conn.execute(
+            "SELECT id, name, size FROM binders ORDER BY id"
+        ).fetchall()
         return [self._load_binder(row["id"], row["name"], row["size"]) for row in rows]
 
     def create_binder(self, name: str, size: BinderSize) -> Binder:
@@ -62,7 +96,9 @@ class Database:
         return Binder(id=binder_id, name=name, size=size)
 
     def rename_binder(self, binder_id: int, new_name: str) -> None:
-        self._conn.execute("UPDATE binders SET name = ? WHERE id = ?", (new_name, binder_id))
+        self._conn.execute(
+            "UPDATE binders SET name = ? WHERE id = ?", (new_name, binder_id)
+        )
         self._conn.commit()
 
     def delete_binder(self, binder_id: int) -> None:
@@ -70,19 +106,17 @@ class Database:
         self._conn.commit()
         logger.info("Deleted binder id=%d", binder_id)
 
-    # ------------------------------------------------------------------
-    # Slots
-    # ------------------------------------------------------------------
-
     def save_binder(self, binder: Binder) -> None:
-        """Persist the current in-memory slot state for a binder."""
         with self._conn:
-            self._conn.execute("DELETE FROM slots WHERE binder_id = ?", (binder.id,))
+            self._conn.execute(
+                "DELETE FROM slots WHERE binder_id = ?", (binder.id,)
+            )
             for slot in binder.slots.values():
                 if slot.card is not None:
                     self._conn.execute(
                         """
-                        INSERT INTO slots (binder_id, page_number, side, position, card_json)
+                        INSERT INTO slots
+                            (binder_id, page_number, side, position, card_json)
                         VALUES (?, ?, ?, ?, ?)
                         """,
                         (
@@ -93,7 +127,9 @@ class Database:
                             _card_to_json(slot.card),
                         ),
                     )
-        logger.info("Saved binder id=%d (%d filled slots)", binder.id, len(binder.slots))
+        logger.info(
+            "Saved binder id=%d (%d filled slots)", binder.id, len(binder.slots)
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -103,7 +139,10 @@ class Database:
         size = BinderSize(size_value)
         binder = Binder(id=binder_id, name=name, size=size)
         rows = self._conn.execute(
-            "SELECT page_number, side, position, card_json FROM slots WHERE binder_id = ?",
+            """
+            SELECT page_number, side, position, card_json
+            FROM slots WHERE binder_id = ?
+            """,
             (binder_id,),
         ).fetchall()
         for row in rows:

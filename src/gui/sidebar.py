@@ -5,7 +5,6 @@ import logging
 import flet as ft
 
 from src.db import Database, Binder, BinderSize
-from src.db.models import PAGES_BY_SIZE
 from src.gui.colors import COLORS
 from src.gui.state import AppState
 
@@ -21,9 +20,12 @@ _SIZE_LABELS = {
 _BINDER_COUNTER: dict[BinderSize, int] = {s: 0 for s in BinderSize}
 
 
-def build_sidebar(page: ft.Page, state: AppState, db: Database) -> ft.Control:
-    """Left sidebar: grouped binder list with create/rename/delete actions."""
-
+def build_sidebar(
+    page: ft.Page,
+    state: AppState,
+    db: Database,
+    on_show_settings: callable,  # type: ignore[type-arg]
+) -> ft.Control:
     binder_list_col = ft.Column(
         [],
         spacing=0,
@@ -52,12 +54,24 @@ def build_sidebar(page: ft.Page, state: AppState, db: Database) -> ft.Control:
         on_click=lambda _: _create_binder(),
     )
 
-    # ── State ────────────────────────────────────────────────────────
+    settings_btn = ft.Container(
+        content=ft.Row(
+            [
+                ft.Icon(ft.Icons.SETTINGS, color=COLORS["text_muted"], size=16),
+                ft.Text("Settings", size=13, color=COLORS["text_muted"]),
+            ],
+            spacing=8,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        bgcolor=COLORS["surface"],
+        border_radius=8,
+        padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+        margin=ft.Margin(left=4, right=4, top=2, bottom=8),
+        on_click=lambda _: on_show_settings(),
+    )
 
     _binders: list[Binder] = []
     _active_id: int | None = None
-
-    # ── Helpers ──────────────────────────────────────────────────────
 
     def _load_and_render() -> None:
         nonlocal _binders
@@ -75,7 +89,6 @@ def build_sidebar(page: ft.Page, state: AppState, db: Database) -> ft.Control:
             group = grouped[size]
             if not group:
                 continue
-
             binder_list_col.controls.append(
                 ft.Container(
                     content=ft.Text(
@@ -87,7 +100,6 @@ def build_sidebar(page: ft.Page, state: AppState, db: Database) -> ft.Control:
                     padding=ft.Padding.only(left=12, top=12, bottom=4, right=0),
                 )
             )
-
             for binder in group:
                 binder_list_col.controls.append(_build_binder_row(binder))
 
@@ -108,11 +120,7 @@ def build_sidebar(page: ft.Page, state: AppState, db: Database) -> ft.Control:
 
         capacity = binder.total_pages * 2 * binder.pockets_per_side
         filled = sum(1 for s in binder.slots.values() if s.card is not None)
-        sub_text = ft.Text(
-            f"{filled}/{capacity}",
-            size=10,
-            color=COLORS["text_muted"],
-        )
+        sub_text = ft.Text(f"{filled}/{capacity}", size=10, color=COLORS["text_muted"])
 
         menu = ft.PopupMenuButton(
             icon=ft.Icons.MORE_VERT,
@@ -150,8 +158,6 @@ def build_sidebar(page: ft.Page, state: AppState, db: Database) -> ft.Control:
             on_click=lambda _, b=binder: _open_binder(b),
         )
 
-    # ── Actions ──────────────────────────────────────────────────────
-
     def _create_binder() -> None:
         size_value = int(new_size_dropdown.value or str(BinderSize.NINE.value))
         size = BinderSize(size_value)
@@ -163,12 +169,9 @@ def build_sidebar(page: ft.Page, state: AppState, db: Database) -> ft.Control:
 
     def _open_binder(binder: Binder) -> None:
         nonlocal _active_id
-
-        # Auto-save the currently open binder before switching.
         if state.active_binder is not None and state.active_binder.id != binder.id:
             db.save_binder(state.active_binder)
             logger.info("Auto-saved binder id=%d", state.active_binder.id)
-
         _active_id = binder.id
         state.active_binder = binder
         state.notify_binder_changed()
@@ -253,12 +256,9 @@ def build_sidebar(page: ft.Page, state: AppState, db: Database) -> ft.Control:
         dlg.open = True
         page.update()
 
-    # ── Initial load ─────────────────────────────────────────────────
     _load_and_render()
 
-    # ── Layout ───────────────────────────────────────────────────────
-
-    return ft.Container(
+    sidebar_container = ft.Container(
         content=ft.Column(
             [
                 ft.Container(
@@ -280,6 +280,7 @@ def build_sidebar(page: ft.Page, state: AppState, db: Database) -> ft.Control:
                     ),
                     padding=ft.Padding.symmetric(horizontal=8, vertical=8),
                 ),
+                settings_btn,
             ],
             spacing=0,
             expand=True,
@@ -289,3 +290,4 @@ def build_sidebar(page: ft.Page, state: AppState, db: Database) -> ft.Control:
         width=max(180, int(page.width * 0.12)),
         expand=False,
     )
+    return sidebar_container
