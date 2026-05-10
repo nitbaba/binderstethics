@@ -81,7 +81,10 @@ def build_settings_view(
 
     def _render() -> None:
         preset_col.controls = [_build_preset_card(p) for p in PRESETS]
-        preset_col.update()
+        try:
+            preset_col.update()
+        except RuntimeError:
+            pass
 
     def _apply(preset: Preset) -> None:
         state.active_preset = preset

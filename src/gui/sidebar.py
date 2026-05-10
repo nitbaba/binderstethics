@@ -24,20 +24,16 @@ def build_sidebar(
     page: ft.Page,
     state: AppState,
     db: Database,
-    on_show_settings: callable,  # type: ignore[type-arg]
+    on_show_settings: callable,
 ) -> ft.Control:
-    binder_list_col = ft.Column(
-        [],
-        spacing=0,
-        scroll=ft.ScrollMode.AUTO,
-        expand=True,
-    )
+
+    def s(n: float) -> int:
+        return max(1, int(n * state.scale_factor))
+
+    binder_list_col = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
 
     new_size_dropdown = ft.Dropdown(
-        options=[
-            ft.DropdownOption(key=str(s.value), text=_SIZE_LABELS[s])
-            for s in BinderSize
-        ],
+        options=[ft.DropdownOption(key=str(sv.value), text=_SIZE_LABELS[sv]) for sv in BinderSize],
         value=str(BinderSize.NINE.value),
         bgcolor=COLORS["surface_2"],
         border_color=COLORS["border"],
@@ -50,15 +46,15 @@ def build_sidebar(
     add_btn = ft.IconButton(
         icon=ft.Icons.ADD,
         icon_color=COLORS["accent"],
-        icon_size=20,
+        icon_size=s(20),
         on_click=lambda _: _create_binder(),
     )
 
     settings_btn = ft.Container(
         content=ft.Row(
             [
-                ft.Icon(ft.Icons.SETTINGS, color=COLORS["text_muted"], size=16),
-                ft.Text("Settings", size=13, color=COLORS["text_muted"]),
+                ft.Icon(ft.Icons.SETTINGS, color=COLORS["text_muted"], size=s(16)),
+                ft.Text("Settings", size=s(13), color=COLORS["text_muted"]),
             ],
             spacing=8,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -80,11 +76,9 @@ def build_sidebar(
 
     def _render_list() -> None:
         binder_list_col.controls.clear()
-
-        grouped: dict[BinderSize, list[Binder]] = {s: [] for s in BinderSize}
+        grouped: dict[BinderSize, list[Binder]] = {sv: [] for sv in BinderSize}
         for b in _binders:
             grouped[b.size].append(b)
-
         for size in BinderSize:
             group = grouped[size]
             if not group:
@@ -93,7 +87,7 @@ def build_sidebar(
                 ft.Container(
                     content=ft.Text(
                         _SIZE_LABELS[size].upper(),
-                        size=10,
+                        size=s(10),
                         weight=ft.FontWeight.W_700,
                         color=COLORS["text_muted"],
                     ),
@@ -102,56 +96,47 @@ def build_sidebar(
             )
             for binder in group:
                 binder_list_col.controls.append(_build_binder_row(binder))
-
-        page.update()
+        try:
+            binder_list_col.update()
+        except RuntimeError:
+            pass
 
     def _build_binder_row(binder: Binder) -> ft.Control:
         is_active = binder.id == _active_id
-        bg = COLORS["accent_dim"] if is_active else COLORS["surface"]
-
-        name_text = ft.Text(
-            binder.name,
-            size=13,
-            color=COLORS["text_primary"],
-            expand=True,
-            no_wrap=True,
-            overflow=ft.TextOverflow.ELLIPSIS,
-        )
-
         capacity = binder.total_pages * 2 * binder.pockets_per_side
-        filled = sum(1 for s in binder.slots.values() if s.card is not None)
-        sub_text = ft.Text(f"{filled}/{capacity}", size=10, color=COLORS["text_muted"])
-
-        menu = ft.PopupMenuButton(
-            icon=ft.Icons.MORE_VERT,
-            icon_color=COLORS["text_muted"],
-            icon_size=16,
-            items=[
-                ft.PopupMenuItem(
-                    content=ft.Text("Rename", color=COLORS["text_primary"]),
-                    on_click=lambda _, b=binder: _prompt_rename(b),
-                ),
-                ft.PopupMenuItem(
-                    content=ft.Text("Delete", color=COLORS["error"]),
-                    on_click=lambda _, b=binder: _confirm_delete(b),
-                ),
-            ],
-        )
-
+        filled = sum(1 for sl in binder.slots.values() if sl.card is not None)
         return ft.Container(
             content=ft.Row(
                 [
                     ft.Column(
-                        [name_text, sub_text],
+                        [
+                            ft.Text(binder.name, size=s(13), color=COLORS["text_primary"],
+                                    expand=True, no_wrap=True, overflow=ft.TextOverflow.ELLIPSIS),
+                            ft.Text(f"{filled}/{capacity}", size=s(10), color=COLORS["text_muted"]),
+                        ],
                         spacing=0,
                         expand=True,
                     ),
-                    menu,
+                    ft.PopupMenuButton(
+                        icon=ft.Icons.MORE_VERT,
+                        icon_color=COLORS["text_muted"],
+                        icon_size=s(16),
+                        items=[
+                            ft.PopupMenuItem(
+                                content=ft.Text("Rename", color=COLORS["text_primary"]),
+                                on_click=lambda _, b=binder: _prompt_rename(b),
+                            ),
+                            ft.PopupMenuItem(
+                                content=ft.Text("Delete", color=COLORS["error"]),
+                                on_click=lambda _, b=binder: _confirm_delete(b),
+                            ),
+                        ],
+                    ),
                 ],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=4,
             ),
-            bgcolor=bg,
+            bgcolor=COLORS["accent_dim"] if is_active else COLORS["surface"],
             border_radius=8,
             padding=ft.Padding.symmetric(horizontal=10, vertical=8),
             margin=ft.Margin(left=4, right=4, top=2, bottom=2),
@@ -162,8 +147,7 @@ def build_sidebar(
         size_value = int(new_size_dropdown.value or str(BinderSize.NINE.value))
         size = BinderSize(size_value)
         _BINDER_COUNTER[size] += 1
-        name = f"{_SIZE_LABELS[size]} #{_BINDER_COUNTER[size]}"
-        binder = db.create_binder(name, size)
+        binder = db.create_binder(f"{_SIZE_LABELS[size]} #{_BINDER_COUNTER[size]}", size)
         _binders.append(binder)
         _render_list()
 
@@ -171,7 +155,6 @@ def build_sidebar(
         nonlocal _active_id
         if state.active_binder is not None and state.active_binder.id != binder.id:
             db.save_binder(state.active_binder)
-            logger.info("Auto-saved binder id=%d", state.active_binder.id)
         _active_id = binder.id
         state.active_binder = binder
         state.notify_binder_changed()
@@ -179,17 +162,10 @@ def build_sidebar(
 
     def _prompt_rename(binder: Binder) -> None:
         name_field = ft.TextField(
-            value=binder.name,
-            color=COLORS["text_primary"],
-            fill_color=COLORS["surface_2"],
-            filled=True,
-            border_radius=8,
-            border_color=COLORS["border"],
-            focused_border_color=COLORS["accent"],
-            cursor_color=COLORS["accent"],
-            autofocus=True,
+            value=binder.name, color=COLORS["text_primary"], fill_color=COLORS["surface_2"],
+            filled=True, border_radius=8, border_color=COLORS["border"],
+            focused_border_color=COLORS["accent"], cursor_color=COLORS["accent"], autofocus=True,
         )
-
         def _do_rename(_: ft.ControlEvent) -> None:
             new_name = name_field.value.strip()
             if new_name:
@@ -200,21 +176,14 @@ def build_sidebar(
                     state.notify_binder_changed()
             dlg.open = False
             _render_list()
-
         dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Rename Binder", color=COLORS["text_primary"]),
-            content=name_field,
-            bgcolor=COLORS["surface"],
+            modal=True, title=ft.Text("Rename Binder", color=COLORS["text_primary"]),
+            content=name_field, bgcolor=COLORS["surface"],
             actions=[
-                ft.TextButton(
-                    content=ft.Text("Cancel", color=COLORS["text_muted"]),
-                    on_click=lambda _: setattr(dlg, "open", False) or page.update(),
-                ),
-                ft.TextButton(
-                    content=ft.Text("Rename", color=COLORS["accent"]),
-                    on_click=_do_rename,
-                ),
+                ft.TextButton(content=ft.Text("Cancel", color=COLORS["text_muted"]),
+                              on_click=lambda _: setattr(dlg, "open", False) or page.update()),
+                ft.TextButton(content=ft.Text("Rename", color=COLORS["accent"]),
+                              on_click=_do_rename),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -231,24 +200,15 @@ def build_sidebar(
                 state.notify_binder_changed()
             dlg.open = False
             _render_list()
-
         dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Delete Binder?", color=COLORS["text_primary"]),
-            content=ft.Text(
-                f'"{binder.name}" will be permanently deleted.',
-                color=COLORS["text_muted"],
-            ),
+            modal=True, title=ft.Text("Delete Binder?", color=COLORS["text_primary"]),
+            content=ft.Text(f'"{binder.name}" will be permanently deleted.', color=COLORS["text_muted"]),
             bgcolor=COLORS["surface"],
             actions=[
-                ft.TextButton(
-                    content=ft.Text("Cancel", color=COLORS["text_muted"]),
-                    on_click=lambda _: setattr(dlg, "open", False) or page.update(),
-                ),
-                ft.TextButton(
-                    content=ft.Text("Delete", color=COLORS["error"]),
-                    on_click=_do_delete,
-                ),
+                ft.TextButton(content=ft.Text("Cancel", color=COLORS["text_muted"]),
+                              on_click=lambda _: setattr(dlg, "open", False) or page.update()),
+                ft.TextButton(content=ft.Text("Delete", color=COLORS["error"]),
+                              on_click=_do_delete),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -256,28 +216,36 @@ def build_sidebar(
         dlg.open = True
         page.update()
 
+    def _on_scale_change() -> None:
+        add_btn.icon_size = s(20)
+        settings_btn.content = ft.Row(
+            [
+                ft.Icon(ft.Icons.SETTINGS, color=COLORS["text_muted"], size=s(16)),
+                ft.Text("Settings", size=s(13), color=COLORS["text_muted"]),
+            ],
+            spacing=8,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+        sidebar_container.width = max(180, int(page.width * 0.12))
+        _render_list()
+        page.update()
+
+    state.register_scale_listener(_on_scale_change)
     _load_and_render()
 
     sidebar_container = ft.Container(
         content=ft.Column(
             [
                 ft.Container(
-                    content=ft.Text(
-                        "BINDERS",
-                        size=11,
-                        weight=ft.FontWeight.W_700,
-                        color=COLORS["text_muted"],
-                    ),
+                    content=ft.Text("BINDERS", size=s(11), weight=ft.FontWeight.W_700,
+                                    color=COLORS["text_muted"]),
                     padding=ft.Padding.symmetric(horizontal=12, vertical=12),
                 ),
                 binder_list_col,
                 ft.Divider(height=1, color=COLORS["border"]),
                 ft.Container(
-                    content=ft.Row(
-                        [new_size_dropdown, add_btn],
-                        spacing=4,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
+                    content=ft.Row([new_size_dropdown, add_btn], spacing=4,
+                                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
                     padding=ft.Padding.symmetric(horizontal=8, vertical=8),
                 ),
                 settings_btn,

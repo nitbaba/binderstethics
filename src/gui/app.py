@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import flet as ft
@@ -20,42 +21,19 @@ logger = logging.getLogger(__name__)
 def build_app(page: ft.Page) -> None:
     db = Database(config.db.path)
     state = AppState()
-
-    # Load persisted preset before touching the window.
     state.active_preset = db.get_preset()
 
-    # ── Page setup ───────────────────────────────────────────────────
-
-    page.title = f"{config.app.name}"
+    page.title = config.app.name
     page.bgcolor = COLORS["bg"]
     page.padding = 0
     page.theme = ft.Theme(color_scheme_seed=COLORS["accent"])
     page.dark_theme = ft.Theme(color_scheme_seed=COLORS["accent"])
     page.theme_mode = ft.ThemeMode.DARK
 
-    # ── Preset application ───────────────────────────────────────────
-
-    def _apply_preset(preset: Preset, *, save: bool = True) -> None:
-        state.active_preset = preset
-        if save:
-            db.save_preset(preset)
-
-        if preset.fullscreen:
-            page.window.full_screen = True
-        else:
-            page.window.full_screen = False
-            page.window.width = preset.width
-            page.window.height = preset.height
-
-        sidebar.width = _sidebar_width()
-        state.notify_binder_changed()
-        state.notify_scale_changed()
-        page.update()
+    # ── Helpers ──────────────────────────────────────────────────────
 
     def _sidebar_width() -> int:
         return max(180, int(page.width * 0.12))
-
-    # ── Save helper ──────────────────────────────────────────────────
 
     def _save_active_binder() -> None:
         if state.active_binder is not None:
@@ -72,8 +50,6 @@ def build_app(page: ft.Page) -> None:
         snack.open = True
         page.update()
 
-    # ── Window close ─────────────────────────────────────────────────
-
     def _on_close(_: ft.ControlEvent) -> None:
         if state.active_binder is not None:
             db.save_binder(state.active_binder)
@@ -82,47 +58,26 @@ def build_app(page: ft.Page) -> None:
 
     page.on_close = _on_close
 
-    # ── Build views ──────────────────────────────────────────────────
+    # ── Shell containers (content replaced on every rebuild) ──────────
 
-    search_view = build_search_view(page, state)
-    binder_view = build_binder_view(page, state, on_save=_save_active_binder)
+    search_container = ft.Container(expand=True, padding=16)
+    binder_container = ft.Container(
+        expand=True,
+        padding=ft.Padding.only(left=16, right=16, bottom=16, top=0),
+    )
+    sidebar_container = ft.Container(expand=False)
 
     main_content = ft.Container(
         content=ft.Column(
-            [
-                ft.Container(content=search_view, expand=True, padding=16),
-                ft.Container(
-                    content=binder_view,
-                    expand=True,
-                    padding=ft.Padding.only(left=16, right=16, bottom=16, top=0),
-                ),
-            ],
+            [search_container, binder_container],
             spacing=0,
             expand=True,
         ),
         expand=True,
     )
 
-    settings_view = build_settings_view(
-        page, state, db, on_preset_apply=_apply_preset
-    )
-
-    settings_container = ft.Container(
-        content=ft.Column(
-            [
-                ft.Container(content=settings_view, expand=True, padding=24),
-            ],
-            expand=True,
-        ),
-        expand=True,
-        visible=False,
-    )
-
-    # Overlay: either main content or settings
-    content_stack = ft.Stack(
-        [main_content, settings_container],
-        expand=True,
-    )
+    settings_container = ft.Container(expand=True, visible=False)
+    content_stack = ft.Stack([main_content, settings_container], expand=True)
 
     def _show_settings() -> None:
         settings_container.visible = True
@@ -134,64 +89,101 @@ def build_app(page: ft.Page) -> None:
         main_content.visible = True
         page.update()
 
-    # Add a back button to the settings view header area
-    settings_view_wrapped = ft.Column(
-        [
-            ft.Row(
-                [
-                    ft.IconButton(
-                        icon=ft.Icons.ARROW_BACK,
-                        icon_color=COLORS["text_muted"],
-                        on_click=lambda _: _hide_settings(),
-                    ),
-                    ft.Text(
-                        "Settings",
-                        size=16,
-                        weight=ft.FontWeight.W_700,
-                        color=COLORS["text_primary"],
-                    ),
-                ],
-                spacing=4,
-            ),
-            ft.Container(content=settings_view, expand=True),
-        ],
-        spacing=0,
-        expand=True,
-    )
-    settings_container.content = ft.Container(
-        content=settings_view_wrapped, expand=True, padding=24
-    )
+    # ── Rebuild ───────────────────────────────────────────────────────
+    # Called on startup, preset change, and manual resize.
+    # Clears all listeners first so they don't accumulate across rebuilds.
 
-    sidebar = build_sidebar(page, state, db, on_show_settings=_show_settings)
+    def _rebuild_views() -> None:
+        state.clear_listeners()
+
+        search_container.content = build_search_view(page, state)
+        binder_container.content = build_binder_view(
+            page, state, on_save=_save_active_binder
+        )
+
+        new_sidebar = build_sidebar(
+            page, state, db, on_show_settings=_show_settings
+        )
+        sidebar_container.content = new_sidebar
+        sidebar_container.width = _sidebar_width()
+
+        settings_view = build_settings_view(
+            page, state, db, on_preset_apply=_apply_preset
+        )
+        settings_container.content = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.IconButton(
+                                icon=ft.Icons.ARROW_BACK,
+                                icon_color=COLORS["text_muted"],
+                                on_click=lambda _: _hide_settings(),
+                            ),
+                            ft.Text(
+                                "Settings",
+                                size=16,
+                                weight=ft.FontWeight.W_700,
+                                color=COLORS["text_primary"],
+                            ),
+                        ],
+                        spacing=4,
+                    ),
+                    ft.Container(content=settings_view, expand=True),
+                ],
+                spacing=0,
+                expand=True,
+            ),
+            expand=True,
+            padding=24,
+        )
+
+        page.update()
+
+    # ── Preset application ────────────────────────────────────────────
+
+    def _apply_preset(preset: Preset, *, save: bool = True) -> None:
+        asyncio.ensure_future(_apply_preset_async(preset, save=save))
+
+    async def _apply_preset_async(preset: Preset, *, save: bool = True) -> None:
+        state.active_preset = preset
+        if save:
+            db.save_preset(preset)
+
+        if preset.fullscreen:
+            page.window.full_screen = True
+        else:
+            page.window.full_screen = False
+            page.window.width = preset.width
+            page.window.height = preset.height
+
+        page.update()
+        # Wait for the window to finish resizing so page.width/height
+        # are correct when s() is called inside the view builders.
+        await asyncio.sleep(0.2)
+
+        _rebuild_views()
 
     # ── on_resize: snap to nearest preset ────────────────────────────
 
     def _on_resize(_: ft.ControlEvent) -> None:
-        # Don't snap if fullscreen is active.
         if state.active_preset.fullscreen:
             return
-
         snapped = nearest_preset(page.width, page.height)
         if snapped.key != state.active_preset.key:
-            # Apply without saving — manual resizes don't persist.
-            _apply_preset(snapped, save=False)
-        else:
-            # Same preset, just reflow layout.
-            sidebar.width = _sidebar_width()
-            state.notify_binder_changed()
-            page.update()
+            state.active_preset = snapped
+            if False:  # don't persist manual resizes
+                db.save_preset(snapped)
+        _rebuild_views()
 
     page.on_resize = _on_resize
 
-    # ── Apply initial preset (no save, already persisted) ────────────
-    _apply_preset(state.active_preset, save=False)
-
-    # ── Root layout ──────────────────────────────────────────────────
+    # ── Root layout ───────────────────────────────────────────────────
 
     page.add(
         ft.Row(
             [
-                sidebar,
+                sidebar_container,
                 ft.VerticalDivider(width=1, color=COLORS["border"]),
                 content_stack,
             ],
@@ -200,3 +192,15 @@ def build_app(page: ft.Page) -> None:
             vertical_alignment=ft.CrossAxisAlignment.START,
         )
     )
+
+    # ── Apply initial preset synchronously at startup ─────────────────
+
+    initial = state.active_preset
+    if initial.fullscreen:
+        page.window.full_screen = True
+    else:
+        page.window.full_screen = False
+        page.window.width = initial.width
+        page.window.height = initial.height
+
+    _rebuild_views()

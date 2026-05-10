@@ -14,21 +14,19 @@ from src.gui.state import AppState
 logger = logging.getLogger(__name__)
 
 _DRAG_GROUP = "card"
-_THUMBNAIL_W = 80
-_THUMBNAIL_H = 112
 
 
 def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
-    """Top half of the main area.
 
-    Layout: [search controls] → [results list | preview panel]
-    """
+    # s() scales any base pixel value by the current preset's scale factor.
+    def s(n: float) -> int:
+        return max(1, int(n * state.scale_factor))
 
-    # ── Internal state ───────────────────────────────────────────────
     _result: SearchResult | None = None
     _current_page = 1
 
     # ── Widgets ──────────────────────────────────────────────────────
+
     name_field = ft.TextField(
         hint_text="Card name…",
         hint_style=ft.TextStyle(color=COLORS["text_muted"]),
@@ -97,22 +95,23 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
 
     preview_image = ft.Image(
         src="",
-        width=350,
-        height=308,
+        width=s(300),
+        height=s(420),
         fit=ft.BoxFit.CONTAIN,
         border_radius=8,
         visible=False,
     )
 
-    preview_name = ft.Text("", size=13, weight=ft.FontWeight.W_600,
-                           color=COLORS["text_primary"])
-    preview_set = ft.Text("", size=11, color=COLORS["text_muted"])
-    preview_number = ft.Text("", size=11, color=COLORS["text_muted"])
+    preview_name = ft.Text(
+        "", size=s(13), weight=ft.FontWeight.W_600, color=COLORS["text_primary"]
+    )
+    preview_set = ft.Text("", size=s(11), color=COLORS["text_muted"])
+    preview_number = ft.Text("", size=s(11), color=COLORS["text_muted"])
 
     close_preview_btn = ft.IconButton(
         icon=ft.Icons.CLOSE,
         icon_color=COLORS["text_muted"],
-        icon_size=16,
+        icon_size=s(16),
         visible=False,
         on_click=lambda _: _clear_preview(),
     )
@@ -121,7 +120,10 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
         content=ft.Column(
             [
                 ft.Row(
-                    [ft.Text("Preview", size=12, color=COLORS["text_muted"]), close_preview_btn],
+                    [
+                        ft.Text("Preview", size=s(12), color=COLORS["text_muted"]),
+                        close_preview_btn,
+                    ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
                 preview_image,
@@ -135,7 +137,7 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
         bgcolor=COLORS["surface"],
         border_radius=10,
         padding=12,
-        width=max(200, int(page.width * 0.3)),
+        width=max(200, int(page.width * 0.22)),
         border=ft.Border.all(1, COLORS["border"]),
     )
 
@@ -147,7 +149,6 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
         page.update()
 
     def _update_pagination() -> None:
-        nonlocal _result
         if _result is None or _result.total_count == 0:
             prev_btn.disabled = True
             next_btn.disabled = True
@@ -160,13 +161,16 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
     def _render_results(cards: list[Card]) -> None:
         results_grid.controls.clear()
         for card in cards:
-            results_grid.controls.append(_build_card_row(card))
+            results_grid.controls.append(_build_card_tile(card))
 
-    def _build_card_row(card: Card) -> ft.Control:
+    def _build_card_tile(card: Card) -> ft.Control:
+        tw = s(80)
+        th = s(112)
+
         thumbnail = ft.Image(
             src=card.image_small,
-            width=_THUMBNAIL_W,
-            height=_THUMBNAIL_H,
+            width=tw,
+            height=th,
             fit=ft.BoxFit.CONTAIN,
             border_radius=4,
         )
@@ -177,8 +181,8 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
             content_feedback=ft.Container(
                 content=ft.Image(
                     src=card.image_small,
-                    width=60,
-                    height=84,
+                    width=s(60),
+                    height=s(84),
                     fit=ft.BoxFit.CONTAIN,
                 ),
                 opacity=0.85,
@@ -190,12 +194,22 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
 
         info_col = ft.Column(
             [
-                ft.Text(card.name, size=11, weight=ft.FontWeight.W_600,
-                        color=COLORS["text_primary"], no_wrap=True,
-                        overflow=ft.TextOverflow.ELLIPSIS),
-                ft.Text(card.set_name, size=10, color=COLORS["text_muted"],
-                        no_wrap=True, overflow=ft.TextOverflow.ELLIPSIS),
-                ft.Text(f"#{card.number}", size=10, color=COLORS["text_muted"]),
+                ft.Text(
+                    card.name,
+                    size=s(11),
+                    weight=ft.FontWeight.W_600,
+                    color=COLORS["text_primary"],
+                    no_wrap=True,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                ),
+                ft.Text(
+                    card.set_name,
+                    size=s(10),
+                    color=COLORS["text_muted"],
+                    no_wrap=True,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                ),
+                ft.Text(f"#{card.number}", size=s(10), color=COLORS["text_muted"]),
             ],
             spacing=2,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -216,10 +230,15 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
 
     def _show_preview(card: Card) -> None:
         preview_image.src = card.image_large
+        preview_image.width = s(300)
+        preview_image.height = s(420)
         preview_image.visible = True
         preview_name.value = card.name
+        preview_name.size = s(13)
         preview_set.value = card.set_name
+        preview_set.size = s(11)
         preview_number.value = f"#{card.number}"
+        preview_number.size = s(11)
         close_preview_btn.visible = True
         state.set_preview(card)
         page.update()
@@ -236,11 +255,27 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
 
     def _on_drag_start(card: Card) -> None:
         state.drag_payload = {"source": "search", "card": card}
-        # Close preview when drag begins and card ends up in binder area.
-        # The binder drop handler will call clear_preview if drop succeeds.
 
     def _on_drag_complete() -> None:
         state.drag_payload = None
+
+    # ── Scale refresh ─────────────────────────────────────────────────
+    # Called when a preset changes so all sized elements update.
+
+    def _on_scale_change() -> None:
+        preview_image.width = s(300)
+        preview_image.height = s(420)
+        preview_name.size = s(13)
+        preview_set.size = s(11)
+        preview_number.size = s(11)
+        close_preview_btn.icon_size = s(16)
+        preview_panel.width = max(200, int(page.width * 0.22))
+        # Rebuild result tiles at new scale if results exist.
+        if _result:
+            _render_results(_result.cards)
+        page.update()
+
+    state.register_scale_listener(_on_scale_change)
 
     # ── Async actions ─────────────────────────────────────────────────
 

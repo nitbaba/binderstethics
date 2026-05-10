@@ -17,6 +17,14 @@ class AppState:
         self._on_sidebar_change: list[Callable[[], None]] = []
         self._on_scale_change: list[Callable[[], None]] = []
 
+    def clear_listeners(self) -> None:
+        """Remove all registered listeners. Called before rebuilding views
+        to prevent accumulation across rebuilds."""
+        self._on_binder_change.clear()
+        self._on_preview_change.clear()
+        self._on_sidebar_change.clear()
+        self._on_scale_change.clear()
+
     def register_binder_listener(self, cb: Callable[[], None]) -> None:
         self._on_binder_change.append(cb)
 
