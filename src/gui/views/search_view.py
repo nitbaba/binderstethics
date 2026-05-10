@@ -70,10 +70,13 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
         width=16, height=16, color=COLORS["accent"], visible=False
     )
 
-    results_list = ft.ListView(
+    results_grid = ft.GridView(
         expand=True,
-        spacing=4,
-        padding=ft.Padding.symmetric(vertical=4, horizontal=0),
+        runs_count=3,
+        max_extent=220,
+        spacing=6,
+        run_spacing=6,
+        padding=ft.Padding.symmetric(vertical=4, horizontal=4),
     )
 
     prev_btn = ft.IconButton(
@@ -94,7 +97,7 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
 
     preview_image = ft.Image(
         src="",
-        width=220,
+        width=350,
         height=308,
         fit=ft.BoxFit.CONTAIN,
         border_radius=8,
@@ -132,7 +135,7 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
         bgcolor=COLORS["surface"],
         border_radius=10,
         padding=12,
-        width=max(200, int(page.width * 0.15)),
+        width=max(200, int(page.width * 0.3)),
         border=ft.Border.all(1, COLORS["border"]),
     )
 
@@ -155,9 +158,9 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
         page_label.value = f"{_current_page} / {_result.total_pages}"
 
     def _render_results(cards: list[Card]) -> None:
-        results_list.controls.clear()
+        results_grid.controls.clear()
         for card in cards:
-            results_list.controls.append(_build_card_row(card))
+            results_grid.controls.append(_build_card_row(card))
 
     def _build_card_row(card: Card) -> ft.Control:
         thumbnail = ft.Image(
@@ -187,28 +190,29 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
 
         info_col = ft.Column(
             [
-                ft.Text(card.name, size=13, weight=ft.FontWeight.W_600,
-                        color=COLORS["text_primary"], no_wrap=True, overflow=ft.TextOverflow.ELLIPSIS),
-                ft.Text(card.set_name, size=11, color=COLORS["text_muted"]),
-                ft.Text(f"#{card.number}", size=11, color=COLORS["text_muted"]),
+                ft.Text(card.name, size=11, weight=ft.FontWeight.W_600,
+                        color=COLORS["text_primary"], no_wrap=True,
+                        overflow=ft.TextOverflow.ELLIPSIS),
+                ft.Text(card.set_name, size=10, color=COLORS["text_muted"],
+                        no_wrap=True, overflow=ft.TextOverflow.ELLIPSIS),
+                ft.Text(f"#{card.number}", size=10, color=COLORS["text_muted"]),
             ],
             spacing=2,
-            expand=True,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
-        row = ft.Container(
-            content=ft.Row(
+        return ft.Container(
+            content=ft.Column(
                 [draggable_thumbnail, info_col],
-                spacing=10,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=6,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
             bgcolor=COLORS["surface"],
             border_radius=8,
-            padding=ft.Padding.symmetric(horizontal=8, vertical=6),
+            padding=ft.Padding.symmetric(horizontal=6, vertical=8),
             border=ft.Border.all(1, COLORS["border"]),
             on_click=lambda _, c=card: _show_preview(c),
         )
-        return row
 
     def _show_preview(card: Card) -> None:
         preview_image.src = card.image_large
@@ -299,7 +303,7 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
     )
 
     results_panel = ft.Column(
-        [pagination_row, results_list],
+        [pagination_row, results_grid],
         spacing=4,
         expand=True,
     )
