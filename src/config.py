@@ -22,7 +22,7 @@ def _get(key: str, default: str) -> str:
 
 @dataclass(frozen=True)
 class AppConfig:
-    name: str = field(default_factory=lambda: _get("APP_NAME", "BindersEthics"))
+    name: str = field(default_factory=lambda: _get("APP_NAME", "BinderStethics"))
     log_level: str = field(default_factory=lambda: _get("LOG_LEVEL", "INFO"))
 
 
