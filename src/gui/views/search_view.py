@@ -351,30 +351,7 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
     )
 
     return ft.Column(
-        [
-            ft.Text(
-                "Display",
-                size=18,
-                weight=ft.FontWeight.W_700,
-                color=COLORS["text_primary"],
-            ),
-            ft.Text(
-                "Choose a resolution preset...",
-                size=13,
-                color=COLORS["text_muted"],
-            ),
-            ft.Divider(height=1, color=COLORS["border"]),
-            preset_col,
-            ft.Container(expand=True),   # pushes credit to the bottom
-            ft.Divider(height=1, color=COLORS["border"]),
-            ft.Text(
-                "Made for me, but hopefully helpful to you! @Nitbaba",
-                size=12,
-                color=COLORS["text_muted"],
-                text_align=ft.TextAlign.CENTER,
-            ),
-        ],
-        spacing=14,
-        scroll=ft.ScrollMode.AUTO,
+        [search_bar, body],
+        spacing=10,
         expand=True,
     )

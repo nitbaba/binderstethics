@@ -103,15 +103,21 @@ def build_settings_view(
                 color=COLORS["text_primary"],
             ),
             ft.Text(
-                "Choose a resolution preset. The window will resize and all "
-                "UI elements will scale accordingly.",
+                "Choose a resolution preset...",
                 size=13,
                 color=COLORS["text_muted"],
             ),
-            ft.Divider(height=1, color=COLORS["border"]),
             preset_col,
+            ft.Divider(height=1, color=COLORS["border"]),
+            ft.Container(expand=True),
+            ft.Divider(height=1, color=COLORS["border"]),
+            ft.Text(
+                "Made for me, but hopefully helpful for you! @Nitbaba",
+                size=16,
+                color=COLORS["text_muted"],
+                text_align=ft.TextAlign.CENTER,
+            ),
         ],
         spacing=14,
-        scroll=ft.ScrollMode.AUTO,
         expand=True,
     )
