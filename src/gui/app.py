@@ -6,6 +6,7 @@ import logging
 import flet as ft
 
 from src.api.scryfall import ScryfallClient
+from src.api.ygoprodeck import YgoClient
 from src.config import config
 from src.db import Database, nearest_preset
 from src.db.models import Preset
@@ -25,6 +26,7 @@ def build_app(page: ft.Page) -> None:
     state.active_preset = db.get_preset()
 
     scryfall_client = ScryfallClient()
+    ygo_client = YgoClient()
 
     page.title = config.app.name
     page.bgcolor = COLORS["bg"]
@@ -59,7 +61,7 @@ def build_app(page: ft.Page) -> None:
             logger.info("Auto-saved on close: binder id=%d", state.active_binder.id)
         db.close()
         async def _cleanup():
-            await scryfall_client.aclose()
+            await asyncio.gather(scryfall_client.aclose(), ygo_client.aclose())
         asyncio.run_coroutine_threadsafe(_cleanup(), page.loop)
 
     page.on_close = _on_close
@@ -101,7 +103,7 @@ def build_app(page: ft.Page) -> None:
         state.clear_listeners()
 
         search_container.content = build_search_view(
-            page, state, scryfall_client=scryfall_client
+            page, state, scryfall_client=scryfall_client, ygo_client=ygo_client
         )
         binder_container.content = build_binder_view(
             page, state, on_save=_save_active_binder

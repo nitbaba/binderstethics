@@ -7,6 +7,7 @@ import flet as ft
 
 from src.api import PokemonTcgClient, PokemonTcgError, SearchResult
 from src.api.scryfall import ScryfallClient, ScryfallError
+from src.api.ygoprodeck import YgoClient, YgoError
 from src.config import config
 from src.db.models import Card, CardSource
 from src.gui.colors import COLORS
@@ -21,6 +22,7 @@ def build_search_view(
     page: ft.Page,
     state: AppState,
     scryfall_client: ScryfallClient | None = None,
+    ygo_client: YgoClient | None = None,
 ) -> ft.Control:
 
     def s(n: float) -> int:
@@ -28,7 +30,7 @@ def build_search_view(
 
     _result: SearchResult | None = None
     _current_page = 1
-    _active_tab: str = "pokemon"  # "pokemon" | "mtg"
+    _active_tab: str = "pokemon"  # "pokemon" | "mtg" | "ygo"
 
     # ── Tab bar ────────────────────────────────────────────────────────────
 
@@ -45,6 +47,9 @@ def build_search_view(
     mtg_tab_text = ft.Text(
         "MTG", size=12, weight=ft.FontWeight.W_600, color=COLORS["text_muted"]
     )
+    ygo_tab_text = ft.Text(
+        "Yu-Gi-Oh", size=12, weight=ft.FontWeight.W_600, color=COLORS["text_muted"]
+    )
 
     pokemon_tab = ft.Container(
         content=pokemon_tab_text,
@@ -56,8 +61,13 @@ def build_search_view(
         on_click=lambda _: _switch_tab("mtg"),
         **_tab_style(False),
     )
+    ygo_tab = ft.Container(
+        content=ygo_tab_text,
+        on_click=lambda _: _switch_tab("ygo"),
+        **_tab_style(False),
+    )
 
-    tab_bar = ft.Row([pokemon_tab, mtg_tab], spacing=4)
+    tab_bar = ft.Row([pokemon_tab, mtg_tab, ygo_tab], spacing=4)
 
     def _switch_tab(tab: str) -> None:
         nonlocal _active_tab, _result, _current_page
@@ -70,19 +80,28 @@ def build_search_view(
         status_text.value = ""
         _update_pagination()
 
-        # Update tab styles
+        # Reset all tabs to inactive
+        for t, txt in [
+            (pokemon_tab, pokemon_tab_text),
+            (mtg_tab, mtg_tab_text),
+            (ygo_tab, ygo_tab_text),
+        ]:
+            t.bgcolor = "transparent"
+            txt.color = COLORS["text_muted"]
+
+        # Activate selected tab
         if tab == "pokemon":
             pokemon_tab.bgcolor = COLORS["surface_2"]
             pokemon_tab_text.color = COLORS["accent"]
-            mtg_tab.bgcolor = "transparent"
-            mtg_tab_text.color = COLORS["text_muted"]
-            set_field.hint_text = "MTG set code… e.g. blb, sos"
-        else:
+            set_field.hint_text = "Set name…"
+        elif tab == "mtg":
             mtg_tab.bgcolor = COLORS["surface_2"]
             mtg_tab_text.color = COLORS["accent_mtg"]
-            pokemon_tab.bgcolor = "transparent"
-            pokemon_tab_text.color = COLORS["text_muted"]
-            set_field.hint_text = "MTG set… e.g. Bloomburrow"
+            set_field.hint_text = "MTG set code… e.g. blb, sos"
+        else:
+            ygo_tab.bgcolor = COLORS["surface_2"]
+            ygo_tab_text.color = COLORS["accent_ygo"]
+            set_field.hint_text = "YGO set… e.g. Legend of Blue Eyes"
 
         page.update()
 
@@ -224,6 +243,13 @@ def build_search_view(
         for card in cards:
             results_grid.controls.append(_build_card_tile(card))
 
+    def _source_color(source: CardSource) -> str:
+        if source == CardSource.MTG:
+            return COLORS["accent_mtg"]
+        if source == CardSource.YGO:
+            return COLORS["accent_ygo"]
+        return COLORS["accent"]
+
     def _build_card_tile(card: Card) -> ft.Control:
         tw = s(80)
         th = s(112)
@@ -253,13 +279,12 @@ def build_search_view(
             on_drag_complete=lambda _: _on_drag_complete(),
         )
 
-        # Source indicator dot for MTG cards
         source_dot = ft.Container(
             width=6, height=6,
             border_radius=3,
-            bgcolor=COLORS["accent_mtg"] if card.source == CardSource.MTG else COLORS["accent"],
+            bgcolor=_source_color(card.source),
             tooltip=card.source.value.upper(),
-        ) if hasattr(card, "source") else ft.Container()
+        )
 
         info_col = ft.Column(
             [
@@ -278,7 +303,10 @@ def build_search_view(
                     no_wrap=True,
                     overflow=ft.TextOverflow.ELLIPSIS,
                 ),
-                ft.Row([ft.Text(f"#{card.number}", size=s(10), color=COLORS["text_muted"]), source_dot], spacing=4),
+                ft.Row(
+                    [ft.Text(f"#{card.number}", size=s(10), color=COLORS["text_muted"]), source_dot],
+                    spacing=4,
+                ),
             ],
             spacing=2,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -362,7 +390,7 @@ def build_search_view(
                         set_name=set_field.value or "",
                         page=_current_page,
                     )
-            else:
+            elif _active_tab == "mtg":
                 if scryfall_client is None:
                     status_text.value = "MTG search not available."
                     _set_loading(False)
@@ -372,8 +400,18 @@ def build_search_view(
                     set_name=set_field.value or "",
                     page=_current_page,
                 )
+            else:
+                if ygo_client is None:
+                    status_text.value = "Yu-Gi-Oh search not available."
+                    _set_loading(False)
+                    return
+                _result = await ygo_client.search(
+                    name=name_field.value or "",
+                    set_name=set_field.value or "",
+                    page=_current_page,
+                )
 
-        except (PokemonTcgError, ScryfallError) as exc:
+        except (PokemonTcgError, ScryfallError, YgoError) as exc:
             status_text.value = f"Error: {exc}"
             logger.error("Search failed: %s", exc)
             _set_loading(False)

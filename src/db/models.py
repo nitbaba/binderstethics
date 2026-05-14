@@ -23,6 +23,7 @@ PAGES_BY_SIZE: dict[BinderSize, int] = {
 class CardSource(str, Enum):
     POKEMON = "pokemon"
     MTG = "mtg"
+    YGO = "ygo"
 
 
 @dataclass
