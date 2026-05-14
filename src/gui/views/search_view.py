@@ -76,7 +76,7 @@ def build_search_view(
             pokemon_tab_text.color = COLORS["accent"]
             mtg_tab.bgcolor = "transparent"
             mtg_tab_text.color = COLORS["text_muted"]
-            set_field.hint_text = "Set name…"
+            set_field.hint_text = "MTG set code… e.g. blb, sos"
         else:
             mtg_tab.bgcolor = COLORS["surface_2"]
             mtg_tab_text.color = COLORS["accent_mtg"]
