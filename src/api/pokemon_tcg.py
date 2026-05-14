@@ -58,25 +58,33 @@ class PokemonTcgClient:
             await self._client.aclose()
             self._client = None
 
+    async def fetch_sets(self) -> list[dict]:
+        """Fetch all sets. Returns list of {"id": str, "name": str}."""
+        if self._client is None:
+            raise RuntimeError("Client must be used as an async context manager.")
+        try:
+            response = await self._client.get(
+                "/sets", params={"select": "id,name", "pageSize": 250}
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise PokemonTcgError(f"HTTP {exc.response.status_code}") from exc
+        except httpx.RequestError as exc:
+            raise PokemonTcgError(f"Request failed: {exc}") from exc
+
+        data = response.json()
+        return [
+            {"id": s["id"], "name": s["name"]}
+            for s in data.get("data", [])
+        ]
+
     async def search_cards(
         self,
         name: str = "",
         set_name: str = "",
         page: int = 1,
     ) -> SearchResult:
-        """Search cards by name and/or set name (both are AND conditions).
-
-        Args:
-            name:     Partial card name. Empty string skips this filter.
-            set_name: Partial set name. Empty string skips this filter.
-            page:     1-indexed page number.
-
-        Returns:
-            SearchResult containing matched cards and pagination metadata.
-
-        Raises:
-            PokemonTcgError: On HTTP or network failures.
-        """
+        """Search cards by name and/or set name (both are AND conditions)."""
         if self._client is None:
             raise RuntimeError("Client must be used as an async context manager.")
 
@@ -86,8 +94,6 @@ class PokemonTcgClient:
         if set_name.strip():
             parts.append(f'set.name:"{set_name.strip()}*"')
 
-        # If neither filter is given, return an empty result rather than
-        # fetching the entire card database.
         if not parts:
             return SearchResult(cards=[], total_count=0, page=1, page_size=_PAGE_SIZE)
 
@@ -116,7 +122,6 @@ class PokemonTcgClient:
 
 
 def _is_valid(raw: dict[str, Any]) -> bool:
-    """Return True only if the card has the fields we need to display it."""
     images = raw.get("images", {})
     return bool(
         raw.get("id")

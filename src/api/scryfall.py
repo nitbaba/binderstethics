@@ -42,9 +42,28 @@ class ScryfallClient:
             headers={"User-Agent": "BindersEthics/1.0"},
             timeout=10.0,
         )
+        # Cache: list of {"code": str, "name": str}
+        self._sets_cache: list[dict] | None = None
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+    async def fetch_sets(self) -> list[dict]:
+        """Return all sets as list of {"code": str, "name": str}. Cached after first call."""
+        if self._sets_cache is not None:
+            return self._sets_cache
+        try:
+            resp = await self._client.get("/sets")
+            resp.raise_for_status()
+            data = resp.json()
+        except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+            logger.warning("Failed to fetch Scryfall sets: %s", exc)
+            return []
+        self._sets_cache = [
+            {"code": s["code"], "name": s["name"]}
+            for s in data.get("data", [])
+        ]
+        return self._sets_cache
 
     async def search(
         self,

@@ -41,9 +41,28 @@ class YgoClient:
             headers={"User-Agent": "BindersEthics/1.0"},
             timeout=10.0,
         )
+        # Cache: list of {"set_name": str, "set_code": str}
+        self._sets_cache: list[dict] | None = None
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+    async def fetch_sets(self) -> list[dict]:
+        """Return all sets as list of {"set_name": str, "set_code": str}. Cached after first call."""
+        if self._sets_cache is not None:
+            return self._sets_cache
+        try:
+            resp = await self._client.get("/cardsets.php")
+            resp.raise_for_status()
+            data = resp.json()
+        except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+            logger.warning("Failed to fetch YGO sets: %s", exc)
+            return []
+        self._sets_cache = [
+            {"set_name": s["set_name"], "set_code": s.get("set_code", "")}
+            for s in data
+        ]
+        return self._sets_cache
 
     async def search(
         self,
@@ -56,14 +75,13 @@ class YgoClient:
 
         params: dict = {"num": _PAGE_SIZE, "offset": (page - 1) * _PAGE_SIZE}
         if name.strip():
-            params["fname"] = name.strip()  # fuzzy name search
+            params["fname"] = name.strip()
         if set_name.strip():
             params["cardset"] = set_name.strip()
 
         try:
             resp = await self._client.get("/cardinfo.php", params=params)
             if resp.status_code == 400:
-                # YGOPRODeck returns 400 with a message when no cards found
                 return SearchResult(cards=[], total_count=0, page=page)
             resp.raise_for_status()
             data = resp.json()
@@ -84,11 +102,8 @@ class YgoClient:
 
 
 def _to_card(raw: dict) -> Card:
-    # Use the first card image available
     images = raw.get("card_images", [{}])
     image = images[0] if images else {}
-
-    # card_sets holds set info; use the first one
     sets = raw.get("card_sets", [{}])
     first_set = sets[0] if sets else {}
 

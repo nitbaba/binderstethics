@@ -16,6 +16,7 @@ from src.gui.state import AppState
 logger = logging.getLogger(__name__)
 
 _DRAG_GROUP = "card"
+_MAX_SUGGESTIONS = 8
 
 
 def build_search_view(
@@ -30,7 +31,10 @@ def build_search_view(
 
     _result: SearchResult | None = None
     _current_page = 1
-    _active_tab: str = "pokemon"  # "pokemon" | "mtg" | "ygo"
+    _active_tab: str = "pokemon"
+
+    _sets_cache: dict[str, list[dict]] = {"pokemon": [], "mtg": [], "ygo": []}
+    _sets_loaded: dict[str, bool] = {"pokemon": False, "mtg": False, "ygo": False}
 
     # ── Tab bar ────────────────────────────────────────────────────────────
 
@@ -78,9 +82,9 @@ def build_search_view(
         _current_page = 1
         results_grid.controls.clear()
         status_text.value = ""
+        _hide_suggestions()
         _update_pagination()
 
-        # Reset all tabs to inactive
         for t, txt in [
             (pokemon_tab, pokemon_tab_text),
             (mtg_tab, mtg_tab_text),
@@ -89,7 +93,6 @@ def build_search_view(
             t.bgcolor = "transparent"
             txt.color = COLORS["text_muted"]
 
-        # Activate selected tab
         if tab == "pokemon":
             pokemon_tab.bgcolor = COLORS["surface_2"]
             pokemon_tab_text.color = COLORS["accent"]
@@ -97,13 +100,135 @@ def build_search_view(
         elif tab == "mtg":
             mtg_tab.bgcolor = COLORS["surface_2"]
             mtg_tab_text.color = COLORS["accent_mtg"]
-            set_field.hint_text = "MTG set code… e.g. blb, sos"
+            set_field.hint_text = "MTG set code or name… e.g. blb, Bloomburrow"
         else:
             ygo_tab.bgcolor = COLORS["surface_2"]
             ygo_tab_text.color = COLORS["accent_ygo"]
             set_field.hint_text = "YGO set… e.g. Legend of Blue Eyes"
 
         page.update()
+
+        if not _sets_loaded[tab]:
+            asyncio.ensure_future(_load_sets(tab))
+
+    # ── Set suggestions ────────────────────────────────────────────────────
+    # Rendered inside a Stack below the search bar so it naturally aligns
+    # with the set field without needing absolute screen coordinates.
+
+    suggestions_list = ft.Column(spacing=0, tight=True)
+
+    suggestions_box = ft.Container(
+        content=suggestions_list,
+        bgcolor=COLORS["surface_2"],
+        border=ft.Border.all(1, COLORS["border"]),
+        border_radius=ft.BorderRadius(0, 0, 8, 8),
+        shadow=ft.BoxShadow(
+            blur_radius=12,
+            color="#88000000",
+            offset=ft.Offset(0, 4),
+        ),
+        padding=ft.Padding.symmetric(vertical=4),
+        visible=False,
+    )
+
+    def _hide_suggestions() -> None:
+        suggestions_box.visible = False
+        try:
+            suggestions_box.update()
+        except Exception:
+            pass
+
+    def _show_suggestions(matches: list[str]) -> None:
+        suggestions_list.controls.clear()
+        for label in matches:
+            row = ft.Container(
+                content=ft.Text(
+                    label, size=s(12), color=COLORS["text_primary"], no_wrap=True
+                ),
+                padding=ft.Padding.symmetric(horizontal=s(12), vertical=s(8)),
+                bgcolor="transparent",
+                on_click=lambda _, l=label: _select_suggestion(l),
+            )
+
+            def _make_hover(r: ft.Container):
+                def _hover(e: ft.HoverEvent):
+                    r.bgcolor = (
+                        COLORS["surface"] if e.data == "true" else "transparent"
+                    )
+                    r.update()
+                return _hover
+
+            row.on_hover = _make_hover(row)
+            suggestions_list.controls.append(row)
+
+        suggestions_box.visible = True
+        try:
+            suggestions_box.update()
+        except Exception:
+            pass
+
+    def _select_suggestion(label: str) -> None:
+        if _active_tab == "mtg" and "(" in label and label.endswith(")"):
+            code = label.split("(")[-1].rstrip(")")
+            set_field.value = code
+        else:
+            set_field.value = label
+        _hide_suggestions()
+        set_field.update()
+
+    def _on_set_field_change(e: ft.ControlEvent) -> None:
+        typed = e.control.value.strip().lower()
+        if not typed:
+            _hide_suggestions()
+            return
+
+        sets = _sets_cache.get(_active_tab, [])
+        if not sets:
+            return
+
+        matches: list[str] = []
+        if _active_tab == "pokemon":
+            for entry in sets:
+                if typed in entry["name"].lower():
+                    matches.append(entry["name"])
+                if len(matches) >= _MAX_SUGGESTIONS:
+                    break
+        elif _active_tab == "mtg":
+            for entry in sets:
+                if typed in entry["name"].lower() or typed in entry["code"].lower():
+                    matches.append(f"{entry['name']} ({entry['code']})")
+                if len(matches) >= _MAX_SUGGESTIONS:
+                    break
+        else:
+            for entry in sets:
+                if typed in entry["set_name"].lower():
+                    matches.append(entry["set_name"])
+                if len(matches) >= _MAX_SUGGESTIONS:
+                    break
+
+        if matches:
+            _show_suggestions(matches)
+        else:
+            _hide_suggestions()
+
+    async def _load_sets(tab: str) -> None:
+        try:
+            if tab == "pokemon":
+                async with PokemonTcgClient(config.api.pokemon_tcg_api_key) as client:
+                    sets = await client.fetch_sets()
+                _sets_cache["pokemon"] = sets
+            elif tab == "mtg" and scryfall_client:
+                sets = await scryfall_client.fetch_sets()
+                _sets_cache["mtg"] = sets
+            elif tab == "ygo" and ygo_client:
+                sets = await ygo_client.fetch_sets()
+                _sets_cache["ygo"] = sets
+            _sets_loaded[tab] = True
+            logger.info("Loaded %d sets for tab %s", len(_sets_cache[tab]), tab)
+        except Exception as exc:
+            logger.warning("Failed to load sets for %s: %s", tab, exc)
+
+    asyncio.ensure_future(_load_sets("pokemon"))
 
     # ── Widgets ────────────────────────────────────────────────────────────
 
@@ -132,7 +257,8 @@ def build_search_view(
         focused_border_color=COLORS["accent"],
         cursor_color=COLORS["accent"],
         expand=True,
-        on_submit=lambda _: asyncio.ensure_future(_do_search()),
+        on_change=_on_set_field_change,
+        on_submit=lambda _: (_hide_suggestions(), asyncio.ensure_future(_do_search())),
     )
 
     search_btn = ft.ElevatedButton(
@@ -140,7 +266,7 @@ def build_search_view(
         bgcolor=COLORS["accent"],
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
         height=48,
-        on_click=lambda _: asyncio.ensure_future(_do_search()),
+        on_click=lambda _: (_hide_suggestions(), asyncio.ensure_future(_do_search())),
     )
 
     status_text = ft.Text("", size=12, color=COLORS["text_muted"])
@@ -442,11 +568,19 @@ def build_search_view(
             await _do_search(reset_page=False)
 
     # ── Layout ─────────────────────────────────────────────────────────────
+    # The set field and its suggestions box sit in a Column so the dropdown
+    # appears directly below the field, naturally aligned.
+
+    set_field_col = ft.Column(
+        [set_field, suggestions_box],
+        spacing=0,
+        expand=True,
+    )
 
     search_bar = ft.Row(
-        [name_field, set_field, search_btn, loading_ring],
+        [name_field, set_field_col, search_btn, loading_ring],
         spacing=8,
-        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        vertical_alignment=ft.CrossAxisAlignment.START,
     )
 
     pagination_row = ft.Row(
