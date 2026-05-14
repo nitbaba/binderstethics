@@ -95,7 +95,7 @@ Get a free Pokémon TCG API key at [dev.pokemontcg.io](https://dev.pokemontcg.io
 
 | Variable | Default | Description |
 |---|---|---|
-| `APP_NAME` | `BindersEthics` | Window title |
+| `APP_NAME` | `BinderStethics` | Window title |
 | `LOG_LEVEL` | `INFO` | Logging verbosity |
 | `POKEMON_TCG_API_KEY` | *(required)* | API key from dev.pokemontcg.io |
 | `DB_PATH` | `data/binders.db` | SQLite database path |
