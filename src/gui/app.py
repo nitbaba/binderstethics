@@ -5,6 +5,7 @@ import logging
 
 import flet as ft
 
+from src.api.scryfall import ScryfallClient
 from src.config import config
 from src.db import Database, nearest_preset
 from src.db.models import Preset
@@ -23,6 +24,8 @@ def build_app(page: ft.Page) -> None:
     state = AppState()
     state.active_preset = db.get_preset()
 
+    scryfall_client = ScryfallClient()
+
     page.title = config.app.name
     page.bgcolor = COLORS["bg"]
     page.padding = 0
@@ -30,7 +33,7 @@ def build_app(page: ft.Page) -> None:
     page.dark_theme = ft.Theme(color_scheme_seed=COLORS["accent"])
     page.theme_mode = ft.ThemeMode.DARK
 
-    # ── Helpers ──────────────────────────────────────────────────────
+    # ── Helpers ────────────────────────────────────────────────────────────
 
     def _sidebar_width() -> int:
         return max(180, int(page.width * 0.12))
@@ -55,10 +58,13 @@ def build_app(page: ft.Page) -> None:
             db.save_binder(state.active_binder)
             logger.info("Auto-saved on close: binder id=%d", state.active_binder.id)
         db.close()
+        async def _cleanup():
+            await scryfall_client.aclose()
+        asyncio.run_coroutine_threadsafe(_cleanup(), page.loop)
 
     page.on_close = _on_close
 
-    # ── Shell containers (content replaced on every rebuild) ──────────
+    # ── Shell containers (content replaced on every rebuild) ───────────────
 
     search_container = ft.Container(expand=True, padding=16)
     binder_container = ft.Container(
@@ -89,14 +95,14 @@ def build_app(page: ft.Page) -> None:
         main_content.visible = True
         page.update()
 
-    # ── Rebuild ───────────────────────────────────────────────────────
-    # Called on startup, preset change, and manual resize.
-    # Clears all listeners first so they don't accumulate across rebuilds.
+    # ── Rebuild ────────────────────────────────────────────────────────────
 
     def _rebuild_views() -> None:
         state.clear_listeners()
 
-        search_container.content = build_search_view(page, state)
+        search_container.content = build_search_view(
+            page, state, scryfall_client=scryfall_client
+        )
         binder_container.content = build_binder_view(
             page, state, on_save=_save_active_binder
         )
@@ -108,7 +114,7 @@ def build_app(page: ft.Page) -> None:
         sidebar_container.width = _sidebar_width()
 
         settings_view = build_settings_view(
-            page, state, db, on_preset_apply=_apply_preset
+            page, state, db, _apply_preset
         )
         settings_container.content = ft.Container(
             content=ft.Column(
@@ -140,7 +146,7 @@ def build_app(page: ft.Page) -> None:
 
         page.update()
 
-    # ── Preset application ────────────────────────────────────────────
+    # ── Preset application ─────────────────────────────────────────────────
 
     def _apply_preset(preset: Preset, *, save: bool = True) -> None:
         asyncio.ensure_future(_apply_preset_async(preset, save=save))
@@ -158,13 +164,10 @@ def build_app(page: ft.Page) -> None:
             page.window.height = preset.height
 
         page.update()
-        # Wait for the window to finish resizing so page.width/height
-        # are correct when s() is called inside the view builders.
         await asyncio.sleep(0.2)
-
         _rebuild_views()
 
-    # ── on_resize: snap to nearest preset ────────────────────────────
+    # ── on_resize ──────────────────────────────────────────────────────────
 
     def _on_resize(_: ft.ControlEvent) -> None:
         if state.active_preset.fullscreen:
@@ -172,13 +175,11 @@ def build_app(page: ft.Page) -> None:
         snapped = nearest_preset(page.width, page.height)
         if snapped.key != state.active_preset.key:
             state.active_preset = snapped
-            if False:  # don't persist manual resizes
-                db.save_preset(snapped)
         _rebuild_views()
 
     page.on_resize = _on_resize
 
-    # ── Root layout ───────────────────────────────────────────────────
+    # ── Root layout ────────────────────────────────────────────────────────
 
     page.add(
         ft.Row(
@@ -193,7 +194,7 @@ def build_app(page: ft.Page) -> None:
         )
     )
 
-    # ── Apply initial preset synchronously at startup ─────────────────
+    # ── Apply initial preset ───────────────────────────────────────────────
 
     initial = state.active_preset
     if initial.fullscreen:

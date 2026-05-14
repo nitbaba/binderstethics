@@ -6,8 +6,9 @@ import logging
 import flet as ft
 
 from src.api import PokemonTcgClient, PokemonTcgError, SearchResult
+from src.api.scryfall import ScryfallClient, ScryfallError
 from src.config import config
-from src.db.models import Card
+from src.db.models import Card, CardSource
 from src.gui.colors import COLORS
 from src.gui.state import AppState
 
@@ -16,16 +17,76 @@ logger = logging.getLogger(__name__)
 _DRAG_GROUP = "card"
 
 
-def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
+def build_search_view(
+    page: ft.Page,
+    state: AppState,
+    scryfall_client: ScryfallClient | None = None,
+) -> ft.Control:
 
-    # s() scales any base pixel value by the current preset's scale factor.
     def s(n: float) -> int:
         return max(1, int(n * state.scale_factor))
 
     _result: SearchResult | None = None
     _current_page = 1
+    _active_tab: str = "pokemon"  # "pokemon" | "mtg"
 
-    # ── Widgets ──────────────────────────────────────────────────────
+    # ── Tab bar ────────────────────────────────────────────────────────────
+
+    def _tab_style(active: bool) -> dict:
+        return {
+            "bgcolor": COLORS["surface_2"] if active else "transparent",
+            "border_radius": 6,
+            "padding": ft.Padding.symmetric(horizontal=12, vertical=6),
+        }
+
+    pokemon_tab_text = ft.Text(
+        "Pokémon", size=12, weight=ft.FontWeight.W_600, color=COLORS["accent"]
+    )
+    mtg_tab_text = ft.Text(
+        "MTG", size=12, weight=ft.FontWeight.W_600, color=COLORS["text_muted"]
+    )
+
+    pokemon_tab = ft.Container(
+        content=pokemon_tab_text,
+        on_click=lambda _: _switch_tab("pokemon"),
+        **_tab_style(True),
+    )
+    mtg_tab = ft.Container(
+        content=mtg_tab_text,
+        on_click=lambda _: _switch_tab("mtg"),
+        **_tab_style(False),
+    )
+
+    tab_bar = ft.Row([pokemon_tab, mtg_tab], spacing=4)
+
+    def _switch_tab(tab: str) -> None:
+        nonlocal _active_tab, _result, _current_page
+        if _active_tab == tab:
+            return
+        _active_tab = tab
+        _result = None
+        _current_page = 1
+        results_grid.controls.clear()
+        status_text.value = ""
+        _update_pagination()
+
+        # Update tab styles
+        if tab == "pokemon":
+            pokemon_tab.bgcolor = COLORS["surface_2"]
+            pokemon_tab_text.color = COLORS["accent"]
+            mtg_tab.bgcolor = "transparent"
+            mtg_tab_text.color = COLORS["text_muted"]
+            set_field.hint_text = "Set name…"
+        else:
+            mtg_tab.bgcolor = COLORS["surface_2"]
+            mtg_tab_text.color = COLORS["accent_mtg"]
+            pokemon_tab.bgcolor = "transparent"
+            pokemon_tab_text.color = COLORS["text_muted"]
+            set_field.hint_text = "MTG set… e.g. Bloomburrow"
+
+        page.update()
+
+    # ── Widgets ────────────────────────────────────────────────────────────
 
     name_field = ft.TextField(
         hint_text="Card name…",
@@ -141,7 +202,7 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
         border=ft.Border.all(1, COLORS["border"]),
     )
 
-    # ── Helpers ──────────────────────────────────────────────────────
+    # ── Helpers ────────────────────────────────────────────────────────────
 
     def _set_loading(active: bool) -> None:
         loading_ring.visible = active
@@ -192,6 +253,14 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
             on_drag_complete=lambda _: _on_drag_complete(),
         )
 
+        # Source indicator dot for MTG cards
+        source_dot = ft.Container(
+            width=6, height=6,
+            border_radius=3,
+            bgcolor=COLORS["accent_mtg"] if card.source == CardSource.MTG else COLORS["accent"],
+            tooltip=card.source.value.upper(),
+        ) if hasattr(card, "source") else ft.Container()
+
         info_col = ft.Column(
             [
                 ft.Text(
@@ -209,7 +278,7 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
                     no_wrap=True,
                     overflow=ft.TextOverflow.ELLIPSIS,
                 ),
-                ft.Text(f"#{card.number}", size=s(10), color=COLORS["text_muted"]),
+                ft.Row([ft.Text(f"#{card.number}", size=s(10), color=COLORS["text_muted"]), source_dot], spacing=4),
             ],
             spacing=2,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -259,8 +328,7 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
     def _on_drag_complete() -> None:
         state.drag_payload = None
 
-    # ── Scale refresh ─────────────────────────────────────────────────
-    # Called when a preset changes so all sized elements update.
+    # ── Scale refresh ──────────────────────────────────────────────────────
 
     def _on_scale_change() -> None:
         preview_image.width = s(300)
@@ -270,14 +338,13 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
         preview_number.size = s(11)
         close_preview_btn.icon_size = s(16)
         preview_panel.width = max(200, int(page.width * 0.22))
-        # Rebuild result tiles at new scale if results exist.
         if _result:
             _render_results(_result.cards)
         page.update()
 
     state.register_scale_listener(_on_scale_change)
 
-    # ── Async actions ─────────────────────────────────────────────────
+    # ── Async actions ──────────────────────────────────────────────────────
 
     async def _do_search(reset_page: bool = True) -> None:
         nonlocal _result, _current_page
@@ -288,13 +355,25 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
         status_text.value = "Searching…"
 
         try:
-            async with PokemonTcgClient(config.api.pokemon_tcg_api_key) as client:
-                _result = await client.search_cards(
+            if _active_tab == "pokemon":
+                async with PokemonTcgClient(config.api.pokemon_tcg_api_key) as client:
+                    _result = await client.search_cards(
+                        name=name_field.value or "",
+                        set_name=set_field.value or "",
+                        page=_current_page,
+                    )
+            else:
+                if scryfall_client is None:
+                    status_text.value = "MTG search not available."
+                    _set_loading(False)
+                    return
+                _result = await scryfall_client.search(
                     name=name_field.value or "",
                     set_name=set_field.value or "",
                     page=_current_page,
                 )
-        except PokemonTcgError as exc:
+
+        except (PokemonTcgError, ScryfallError) as exc:
             status_text.value = f"Error: {exc}"
             logger.error("Search failed: %s", exc)
             _set_loading(False)
@@ -324,7 +403,7 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
             _current_page += 1
             await _do_search(reset_page=False)
 
-    # ── Layout ───────────────────────────────────────────────────────
+    # ── Layout ─────────────────────────────────────────────────────────────
 
     search_bar = ft.Row(
         [name_field, set_field, search_btn, loading_ring],
@@ -351,7 +430,7 @@ def build_search_view(page: ft.Page, state: AppState) -> ft.Control:
     )
 
     return ft.Column(
-        [search_bar, body],
+        [tab_bar, search_bar, body],
         spacing=10,
         expand=True,
     )

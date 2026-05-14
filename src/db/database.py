@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.db.models import (
-    Binder, BinderSize, Card, BinderSlot,
+    Binder, BinderSize, Card, BinderSlot, CardSource,
     Preset, PRESET_BY_KEY, DEFAULT_PRESET,
 )
 
@@ -166,6 +166,7 @@ def _card_to_json(card: Card) -> str:
         "number": card.number,
         "image_small": card.image_small,
         "image_large": card.image_large,
+        "source": card.source.value,
     })
 
 
@@ -179,4 +180,5 @@ def _card_from_json(raw: str) -> Card:
         number=data["number"],
         image_small=data["image_small"],
         image_large=data["image_large"],
+        source=CardSource(data.get("source", "pokemon")),
     )

@@ -13,4 +13,5 @@ COLORS = {
     "slot_empty":   "#12151E",
     "slot_hover":   "#2A2D3E",
     "slot_border":  "#3A3D4E",
+    "accent_mtg": "#7b68ee",
 }
